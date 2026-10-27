@@ -1,183 +1,205 @@
 
--- SCOOTER TRICK CONTROLLER
--- Place this LocalScript in StarterPlayer > StarterPlayerScripts
+-- 🛴 SCOOTER TRICKS + MUSIC
+-- LocalScript prototype
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Settings
-local height = 10
-local speed = 20
-local turnSpeed = 360 -- degrees per second
-
+-- SETTINGS
 local active = false
 local character, humanoid, root
-local startPosition
+local startPosition, startRotation
 local elapsed = 0
 local angle = 0
-local loop
+local connection
 
--- GUI
+-- MUSIC 🎧
+local music = Instance.new("Sound")
+music.Name = "ScooterMusic"
+music.SoundId = "rbxassetid://125476440612900"
+music.Volume = 0.5
+music.Looped = true
+music.Parent = SoundService
+
+-- MAIN INTERFACE
 local gui = Instance.new("ScreenGui")
 gui.Name = "ScooterTrickUI"
 gui.ResetOnSpawn = false
 gui.Parent = playerGui
 
 local panel = Instance.new("Frame")
-panel.Size = UDim2.fromOffset(290, 340)
-panel.Position = UDim2.new(0, 25, 0.5, -170)
-panel.BackgroundColor3 = Color3.fromRGB(28, 30, 38)
+panel.Size = UDim2.fromOffset(285, 390)
+panel.Position = UDim2.new(0, 20, 0.5, -195)
+panel.BackgroundColor3 = Color3.fromRGB(28, 30, 40)
 panel.BorderSizePixel = 0
 panel.Parent = gui
 
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 12)
-corner.Parent = panel
+Instance.new("UICorner", panel).CornerRadius =
+    UDim.new(0, 12)
 
-local function makeLabel(text, y, size)
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(1, -24, 0, size or 28)
-	label.Position = UDim2.fromOffset(12, y)
-	label.BackgroundTransparency = 1
-	label.Text = text
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.TextSize = 16
-	label.Font = Enum.Font.Gotham
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.Parent = panel
-	return label
+local function label(text, y, h)
+    local obj = Instance.new("TextLabel")
+    obj.Size = UDim2.new(1, -20, 0, h or 24)
+    obj.Position = UDim2.fromOffset(10, y)
+    obj.BackgroundTransparency = 1
+    obj.Text = text
+    obj.TextColor3 = Color3.new(1, 1, 1)
+    obj.Font = Enum.Font.Gotham
+    obj.TextSize = 14
+    obj.TextXAlignment = Enum.TextXAlignment.Left
+    obj.Parent = panel
+    return obj
 end
 
-makeLabel("🛴  SCOOTER TRICKS", 12, 34).Font =
-	Enum.Font.GothamBold
+label("🛴 SCOOTER TRICKS", 10, 30).Font =
+    Enum.Font.GothamBold
 
 local function makeInput(title, default, y)
-	makeLabel(title, y, 25)
+    label(title, y, 22)
 
-	local input = Instance.new("TextBox")
-	input.Size = UDim2.new(1, -24, 0, 34)
-	input.Position = UDim2.fromOffset(12, y + 25)
-	input.BackgroundColor3 = Color3.fromRGB(48, 51, 63)
-	input.TextColor3 = Color3.new(1, 1, 1)
-	input.PlaceholderText = title
-	input.Text = tostring(default)
-	input.TextSize = 16
-	input.Font = Enum.Font.Gotham
-	input.ClearTextOnFocus = false
-	input.Parent = panel
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(1, -20, 0, 30)
+    box.Position = UDim2.fromOffset(10, y + 22)
+    box.BackgroundColor3 = Color3.fromRGB(48, 51, 64)
+    box.TextColor3 = Color3.new(1, 1, 1)
+    box.Text = tostring(default)
+    box.TextSize = 14
+    box.Font = Enum.Font.Gotham
+    box.ClearTextOnFocus = false
+    box.Parent = panel
 
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 7)
-	c.Parent = input
+    Instance.new("UICorner", box).CornerRadius =
+        UDim.new(0, 6)
 
-	return input
+    return box
 end
 
-local heightInput = makeInput("Air height (studs)", height, 48)
-local speedInput = makeInput("Forward speed", speed, 123)
-local turnInput = makeInput("Spin speed (degrees/sec)", turnSpeed, 198)
+local heightBox = makeInput("Air height (studs)", 2, 42)
+local speedBox = makeInput("Forward speed (studs/sec)", 0, 96)
+local turnBox = makeInput("Spin speed (degrees/sec)", 360, 150)
 
-local function makeButton(text, color, x, callback)
-	local button = Instance.new("TextButton")
-	button.Size = UDim2.fromOffset(125, 38)
-	button.Position = UDim2.fromOffset(x, 280)
-	button.BackgroundColor3 = color
-	button.TextColor3 = Color3.new(1, 1, 1)
-	button.Text = text
-	button.TextSize = 15
-	button.Font = Enum.Font.GothamBold
-	button.Parent = panel
+local status = label("Status: Ready", 204, 22)
+status.TextSize = 12
 
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 8)
-	c.Parent = button
+local function makeButton(text, color, x, y, callback)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.fromOffset(125, 36)
+    b.Position = UDim2.fromOffset(x, y)
+    b.BackgroundColor3 = color
+    b.TextColor3 = Color3.new(1, 1, 1)
+    b.Text = text
+    b.TextSize = 13
+    b.Font = Enum.Font.GothamBold
+    b.Parent = panel
 
-	button.Activated:Connect(callback)
-	return button
+    Instance.new("UICorner", b).CornerRadius =
+        UDim.new(0, 7)
+
+    b.Activated:Connect(callback)
+    return b
 end
 
-local status = makeLabel("Status: Ready", 250, 24)
-status.TextSize = 13
-
+-- STOP TRICK
 local function stopTrick()
-	active = false
+    active = false
 
-	if loop then
-		loop:Disconnect()
-		loop = nil
-	end
+    if connection then
+        connection:Disconnect()
+        connection = nil
+    end
 
-	if root and root.Parent then
-		root.Anchored = false
-	end
+    if humanoid and humanoid.Parent then
+        humanoid.AutoRotate = true
+    end
 
-	if humanoid and humanoid.Parent then
-		humanoid.AutoRotate = true
-		humanoid.PlatformStand = false
-	end
-
-	status.Text = "Status: Stopped"
+    status.Text = "Status: Stopped"
 end
 
+-- START TRICK
 local function startTrick()
-	if active then return end
+    if active then return end
 
-	character = player.Character
-	if not character then return end
+    character = player.Character
+    if not character then return end
 
-	humanoid = character:FindFirstChildOfClass("Humanoid")
-	root = character:FindFirstChild("HumanoidRootPart")
+    humanoid = character:FindFirstChildOfClass("Humanoid")
+    root = character:FindFirstChild("HumanoidRootPart")
 
-	if not humanoid or not root or humanoid.Health <= 0 then
-		status.Text = "Status: Character unavailable"
-		return
-	end
+    if not humanoid or not root or humanoid.Health <= 0 then
+        status.Text = "Status: Character unavailable"
+        return
+    end
 
-	height = math.clamp(tonumber(heightInput.Text) or 10, 0, 200)
-	speed = math.clamp(tonumber(speedInput.Text) or 20, 0, 100)
-	turnSpeed = math.clamp(tonumber(turnInput.Text) or 360, 0, 1440)
+    local height = math.clamp(tonumber(heightBox.Text) or 2, 0, 100)
+    local speed = math.clamp(tonumber(speedBox.Text) or 0, 0, 100)
+    local turnSpeed = math.clamp(tonumber(turnBox.Text) or 360, 0, 1440)
 
-	active = true
-	elapsed = 0
-	angle = 0
-	startPosition = root.Position
+    startPosition = root.Position
+    startRotation = root.CFrame.Rotation
+    elapsed = 0
+    angle = 0
 
-	humanoid.AutoRotate = false
-	humanoid.PlatformStand = true
-	root.Anchored = true
+    humanoid.AutoRotate = false
+    active = true
+    status.Text = "Status: Trick active"
 
-	status.Text = "Status: Trick active!"
+    connection = RunService.RenderStepped:Connect(function(dt)
+        if not active or not root.Parent or humanoid.Health <= 0 then
+            stopTrick()
+            return
+        end
 
-	loop = RunService.RenderStepped:Connect(function(dt)
-		if not active or not root or not root.Parent then
-			stopTrick()
-			return
-		end
+        elapsed += dt
+        angle += math.rad(turnSpeed) * dt
 
-		elapsed += dt
-		angle += math.rad(turnSpeed) * dt
+        -- Keep movement straight, independent of spin.
+        local forward = startRotation.LookVector * speed * elapsed
+        local rise = math.min(elapsed / 0.5, 1) * height
 
-		-- Rise to the selected height, then stay airborne.
-		local rise = math.min(elapsed / 0.6, 1) * height
+        local position = startPosition
+            + forward
+            + Vector3.new(0, rise, 0)
 
-		-- Move forward in the direction the character initially faced.
-		local forward = startPosition + root.CFrame.LookVector * 0
-		local direction = character:GetPivot().LookVector
-		local position = startPosition
-			+ Vector3.new(0, rise, 0)
-			+ direction * speed * elapsed
-
-		root.CFrame = CFrame.new(position)
-			* CFrame.Angles(0, angle, 0)
-	end)
+        root.CFrame = CFrame.new(position)
+            * CFrame.Angles(0, angle, 0)
+            * startRotation
+    end)
 end
 
-makeButton("START TRICK", Color3.fromRGB(30, 155, 90), 12, startTrick)
-makeButton("STOP", Color3.fromRGB(195, 55, 65), 153, stopTrick)
+makeButton("START TRICK", Color3.fromRGB(30, 155, 90),
+    10, 238, startTrick)
+
+makeButton("STOP", Color3.fromRGB(195, 55, 65),
+    150, 238, stopTrick)
+
+-- MUSIC BUTTON 🎵
+local musicButton = makeButton(
+    "▶ PLAY MUSIC",
+    Color3.fromRGB(110, 70, 180),
+    10, 285,
+    function()
+        if music.IsPlaying then
+            music:Pause()
+            musicButton.Text = "▶ PLAY MUSIC"
+        else
+            music:Play()
+            musicButton.Text = "⏸ PAUSE MUSIC"
+        end
+    end
+)
+
+-- VOLUME CONTROL
+local volumeBox = makeInput("Music volume (0-100)", 50, 326)
+
+volumeBox.FocusLost:Connect(function()
+    local volume = tonumber(volumeBox.Text) or 50
+    music.Volume = math.clamp(volume, 0, 100) / 100
+end)
 
 player.CharacterAdded:Connect(function()
-	if active then stopTrick() end
+    stopTrick()
 end)
