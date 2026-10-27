@@ -1,13 +1,12 @@
 
--- RZR by leo — Original GUI + updated trick logic
--- Put this LocalScript in StarterPlayer > StarterPlayerScripts
+-- RZR by leo | Original GUI + fixed Air Spin
+-- Place in StarterPlayer > StarterPlayerScripts
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
-
 local gui = Instance.new("ScreenGui")
 gui.Name = "AirSpinGUI"
 gui.ResetOnSpawn = false
@@ -29,7 +28,6 @@ local songs = {
     ["Track 2"] = "116873078212017",
     ["Fruity 2.0"] = "102616343336371"
 }
-
 local songNames = {"1 tap", "Track 2", "Fruity 2.0"}
 local songIndex = 1
 
@@ -40,11 +38,12 @@ music.Looped = true
 music.SoundId = "rbxassetid://" .. songs[songNames[songIndex]]
 music.Parent = gui
 
--- ORIGINAL GUI STYLE
+-- ORIGINAL GUI
 local panel = Instance.new("Frame")
-panel.Size = UDim2.fromOffset(280, 450)
+panel.Size = UDim2.fromOffset(280, 505)
 panel.Position = UDim2.new(0, 25, 0.3, 0)
 panel.BackgroundColor3 = Color3.fromRGB(25, 25, 34)
+panel.BorderSizePixel = 0
 panel.Parent = gui
 Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 12)
 
@@ -76,7 +75,10 @@ local hideButton = Instance.new("TextButton")
 hideButton.Size = UDim2.fromOffset(32, 28)
 hideButton.Position = UDim2.new(1, -38, 0, 3)
 hideButton.Text = "—"
+hideButton.TextColor3 = Color3.new(1, 1, 1)
+hideButton.BackgroundColor3 = Color3.fromRGB(68, 88, 165)
 hideButton.Parent = panel
+Instance.new("UICorner", hideButton).CornerRadius = UDim.new(0, 7)
 
 local spinButton = makeButton("Air Spin", 40, panel)
 local fallButton = makeButton("Air Spin (Fall)", 80, panel)
@@ -96,8 +98,6 @@ status.Parent = panel
 
 -- SLIDERS
 local function makeSlider(label, y, minValue, maxValue, initial, callback, decimals)
-    local value = initial
-
     local text = Instance.new("TextLabel")
     text.Size = UDim2.new(1, -20, 0, 20)
     text.Position = UDim2.fromOffset(10, y)
@@ -113,10 +113,12 @@ local function makeSlider(label, y, minValue, maxValue, initial, callback, decim
     bar.Position = UDim2.fromOffset(10, y + 23)
     bar.Text = ""
     bar.BackgroundColor3 = Color3.fromRGB(65, 65, 78)
+    bar.BorderSizePixel = 0
     bar.Parent = panel
     Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
 
     local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(0, 0, 1, 0)
     fill.BackgroundColor3 = Color3.fromRGB(115, 155, 255)
     fill.BorderSizePixel = 0
     fill.Parent = bar
@@ -137,24 +139,21 @@ local function makeSlider(label, y, minValue, maxValue, initial, callback, decim
             (x - bar.AbsolutePosition.X) / width, 0, 1
         )
 
+        local raw = minValue + ratio * (maxValue - minValue)
         if decimals then
             local scale = 10 ^ decimals
-            value = math.floor(
-                (minValue + ratio * (maxValue - minValue)) * scale + 0.5
-            ) / scale
+            raw = math.floor(raw * scale + 0.5) / scale
         else
-            value = math.floor(
-                minValue + ratio * (maxValue - minValue) + 0.5
-            )
+            raw = math.floor(raw + 0.5)
         end
 
         fill.Size = UDim2.fromScale(ratio, 1)
-        text.Text = label .. ": " .. formatValue(value)
-        callback(value)
+        text.Text = label .. ": " .. formatValue(raw)
+        callback(raw)
     end
 
-    local initialRatio = (initial - minValue) / (maxValue - minValue)
-    fill.Size = UDim2.fromScale(initialRatio, 1)
+    local ratio = (initial - minValue) / (maxValue - minValue)
+    fill.Size = UDim2.fromScale(ratio, 1)
     text.Text = label .. ": " .. formatValue(initial)
     callback(initial)
 
@@ -195,14 +194,10 @@ makeSlider("Number of spins", 325, 1, 30, spinCount,
 makeSlider("Float height (studs)", 375, 1, 10, floatHeight,
     function(v) floatHeight = v end)
 
--- Ground time slider sits below the visible original layout.
--- The panel is extended to fit it.
-panel.Size = UDim2.fromOffset(280, 505)
-
 makeSlider("Ground time (seconds)", 425, 0, 3, groundTime,
     function(v) groundTime = v end, 1)
 
--- HIDE / SHOW GUI
+-- SHOW GUI BUTTON
 local showButton = Instance.new("TextButton")
 showButton.Size = UDim2.fromOffset(110, 34)
 showButton.Position = UDim2.fromOffset(20, 100)
@@ -225,7 +220,7 @@ showButton.Activated:Connect(function()
     showButton.Visible = false
 end)
 
--- DRAG PANEL BY TITLE
+-- DRAG GUI
 local draggingPanel = false
 local dragStart
 local startPosition
@@ -261,24 +256,21 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- TRICK LOGIC
+-- TRICK CONTROL
 local function stopTrick()
     trickToken += 1
     activeTrick = nil
-
     spinButton.Text = "Air Spin"
     fallButton.Text = "Air Spin (Fall)"
     status.Text = "Ready"
 end
 
 local function doTrick(trickName)
-    -- Clicking the active trick toggles it off.
     if activeTrick == trickName then
         stopTrick()
         return
     end
 
-    -- Switching tricks cancels the previous trick.
     trickToken += 1
     local myToken = trickToken
     activeTrick = trickName
@@ -300,7 +292,7 @@ local function doTrick(trickName)
         end
 
         if trickName == "fall" then
-            -- Keeps the original launch behavior.
+            -- Original working Fall launch logic, unchanged.
             root.AssemblyLinearVelocity = Vector3.new(
                 root.AssemblyLinearVelocity.X,
                 jumpPower,
@@ -323,56 +315,69 @@ local function doTrick(trickName)
             end
 
         elseif trickName == "float" then
-            -- Smooth float up; no jump impulse.
+            -- Normal Air Spin: float up, spin, return to start.
             local startCFrame = root.CFrame
             local startPosition = root.Position
             local originalRotation = startCFrame - startPosition
             local targetPosition = startPosition + Vector3.new(0, floatHeight, 0)
             local previousAutoRotate = humanoid.AutoRotate
+            local wasAnchored = root.Anchored
 
             humanoid.AutoRotate = false
+            root.Anchored = true
 
-            local riseDuration = 0.35
-            local elapsed = 0
-
-            while elapsed < riseDuration
-                and activeTrick == trickName
-                and trickToken == myToken
-                and root.Parent
-                and humanoid.Health > 0 do
-
-                elapsed += RunService.RenderStepped:Wait()
-                local alpha = math.clamp(elapsed / riseDuration, 0, 1)
-                local position = startPosition:Lerp(targetPosition, alpha)
-                root.CFrame = CFrame.new(position) * originalRotation
+            local function stillActive()
+                return activeTrick == "float"
+                    and trickToken == myToken
+                    and root.Parent ~= nil
+                    and humanoid.Health > 0
             end
 
-            -- Spin while smoothly returning to the starting height.
-            local duration = (360 * spinCount) / math.max(spinSpeed, 1)
-            elapsed = 0
+            local function animate(fromPosition, toPosition, duration, doSpin)
+                local elapsed = 0
 
-            while elapsed < duration
-                and activeTrick == trickName
-                and trickToken == myToken
-                and root.Parent
-                and humanoid.Health > 0 do
+                while elapsed < duration and stillActive() do
+                    elapsed += RunService.RenderStepped:Wait()
 
-                elapsed += RunService.RenderStepped:Wait()
-                local alpha = math.clamp(elapsed / duration, 0, 1)
-                local position = targetPosition:Lerp(startPosition, alpha)
-                local angle = math.rad(spinSpeed * elapsed)
+                    local alpha = math.clamp(elapsed / duration, 0, 1)
+                    local position = fromPosition:Lerp(toPosition, alpha)
+                    local angle = doSpin and math.rad(spinSpeed * elapsed) or 0
 
-                root.CFrame = CFrame.new(position)
-                    * originalRotation
-                    * CFrame.Angles(0, angle, 0)
+                    root.CFrame = CFrame.new(position)
+                        * originalRotation
+                        * CFrame.Angles(0, angle, 0)
+                end
+
+                return stillActive()
             end
 
-            -- Pause on the ground for the selected duration.
-            if activeTrick == trickName
-                and trickToken == myToken
-                and root.Parent
-                and humanoid.Health > 0 then
+            -- Smooth rise without jumping.
+            local completed = animate(
+                startPosition,
+                targetPosition,
+                0.4,
+                false
+            )
+
+            -- Spin while returning to the original position.
+            if completed then
+                local duration = (360 * spinCount) / math.max(spinSpeed, 1)
+                completed = animate(
+                    targetPosition,
+                    startPosition,
+                    duration,
+                    true
+                )
+            end
+
+            -- Pause at the starting position for the selected duration.
+            if completed and stillActive() then
                 task.wait(groundTime)
+            end
+
+            -- Restore physics even if the trick was cancelled.
+            if root.Parent then
+                root.Anchored = wasAnchored
             end
 
             if humanoid.Parent then
@@ -394,7 +399,7 @@ fallButton.Activated:Connect(function()
     doTrick("fall")
 end)
 
--- MUSIC CONTROLS
+-- MUSIC
 musicButton.Activated:Connect(function()
     if music.IsPlaying then
         music:Stop()
