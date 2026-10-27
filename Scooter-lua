@@ -1,205 +1,291 @@
 
--- 🛴 SCOOTER TRICKS + MUSIC
--- LocalScript prototype
+--[[
+    SCOOTER TRICK CONTROLLER
+    Roblox Studio prototype
+    Place this LocalScript in StarterPlayerScripts.
+
+    Controls:
+    - Height
+    - Spin speed
+    - Number of rotations
+    - Start / Stop
+    - Music and volume
+
+    Note: This animates the character root only.
+    A separate vehicle assembly must be controlled by
+    its own vehicle system to stay attached correctly.
+]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local SoundService = game:GetService("SoundService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- SETTINGS
-local active = false
-local character, humanoid, root
-local startPosition, startRotation
-local elapsed = 0
-local angle = 0
-local connection
+local HEIGHT = 5
+local SPIN_SPEED = 1080
+local SPINS = 15
+local RISE_TIME = 0.6
+local FALL_TIME = 0.6
 
--- MUSIC 🎧
-local music = Instance.new("Sound")
-music.Name = "ScooterMusic"
-music.SoundId = "rbxassetid://125476440612900"
-music.Volume = 0.5
-music.Looped = true
-music.Parent = SoundService
+local MUSIC_ID = "rbxassetid://125476440612900"
 
--- MAIN INTERFACE
+local running = false
+local animationConnection
+local cycleToken = 0
+
+-- GUI
 local gui = Instance.new("ScreenGui")
-gui.Name = "ScooterTrickUI"
+gui.Name = "ScooterTrickController"
 gui.ResetOnSpawn = false
 gui.Parent = playerGui
 
 local panel = Instance.new("Frame")
-panel.Size = UDim2.fromOffset(285, 390)
-panel.Position = UDim2.new(0, 20, 0.5, -195)
-panel.BackgroundColor3 = Color3.fromRGB(28, 30, 40)
+panel.Size = UDim2.fromOffset(280, 370)
+panel.Position = UDim2.new(0, 20, 0.3, 0)
+panel.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
 panel.BorderSizePixel = 0
 panel.Parent = gui
 
-Instance.new("UICorner", panel).CornerRadius =
-    UDim.new(0, 12)
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = panel
 
-local function label(text, y, h)
-    local obj = Instance.new("TextLabel")
-    obj.Size = UDim2.new(1, -20, 0, h or 24)
-    obj.Position = UDim2.fromOffset(10, y)
-    obj.BackgroundTransparency = 1
-    obj.Text = text
-    obj.TextColor3 = Color3.new(1, 1, 1)
-    obj.Font = Enum.Font.Gotham
-    obj.TextSize = 14
-    obj.TextXAlignment = Enum.TextXAlignment.Left
-    obj.Parent = panel
-    return obj
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -20, 0, 38)
+title.Position = UDim2.fromOffset(10, 5)
+title.BackgroundTransparency = 1
+title.Text = "🛴 SCOOTER TRICKS"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 17
+title.Parent = panel
+
+local function makeInput(labelText, default, y)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.fromOffset(130, 28)
+    label.Position = UDim2.fromOffset(12, y)
+    label.BackgroundTransparency = 1
+    label.Text = labelText
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = panel
+
+    local input = Instance.new("TextBox")
+    input.Size = UDim2.fromOffset(105, 28)
+    input.Position = UDim2.fromOffset(160, y)
+    input.BackgroundColor3 = Color3.fromRGB(48, 48, 60)
+    input.TextColor3 = Color3.new(1, 1, 1)
+    input.PlaceholderText = tostring(default)
+    input.Text = tostring(default)
+    input.Font = Enum.Font.Gotham
+    input.TextSize = 13
+    input.ClearTextOnFocus = false
+    input.Parent = panel
+
+    local inputCorner = Instance.new("UICorner")
+    inputCorner.CornerRadius = UDim.new(0, 6)
+    inputCorner.Parent = input
+
+    return input
 end
 
-label("🛴 SCOOTER TRICKS", 10, 30).Font =
-    Enum.Font.GothamBold
+local heightInput = makeInput("Height (studs)", HEIGHT, 52)
+local speedInput = makeInput("Spin speed (deg/s)", SPIN_SPEED, 91)
+local spinsInput = makeInput("Full rotations", SPINS, 130)
+local volumeInput = makeInput("Music volume (0-10)", 5, 169)
 
-local function makeInput(title, default, y)
-    label(title, y, 22)
+local function makeButton(text, y, color, callback)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.fromOffset(118, 34)
+    button.Position = UDim2.fromOffset(12, y)
+    button.BackgroundColor3 = color
+    button.Text = text
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 13
+    button.Parent = panel
 
-    local box = Instance.new("TextBox")
-    box.Size = UDim2.new(1, -20, 0, 30)
-    box.Position = UDim2.fromOffset(10, y + 22)
-    box.BackgroundColor3 = Color3.fromRGB(48, 51, 64)
-    box.TextColor3 = Color3.new(1, 1, 1)
-    box.Text = tostring(default)
-    box.TextSize = 14
-    box.Font = Enum.Font.Gotham
-    box.ClearTextOnFocus = false
-    box.Parent = panel
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 7)
+    buttonCorner.Parent = button
 
-    Instance.new("UICorner", box).CornerRadius =
-        UDim.new(0, 6)
-
-    return box
+    button.Activated:Connect(callback)
+    return button
 end
 
-local heightBox = makeInput("Air height (studs)", 2, 42)
-local speedBox = makeInput("Forward speed (studs/sec)", 0, 96)
-local turnBox = makeInput("Spin speed (degrees/sec)", 360, 150)
-
-local status = label("Status: Ready", 204, 22)
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1, -24, 0, 25)
+status.Position = UDim2.fromOffset(12, 207)
+status.BackgroundTransparency = 1
+status.Text = "Ready"
+status.TextColor3 = Color3.fromRGB(180, 220, 180)
+status.Font = Enum.Font.Gotham
 status.TextSize = 12
+status.Parent = panel
 
-local function makeButton(text, color, x, y, callback)
-    local b = Instance.new("TextButton")
-    b.Size = UDim2.fromOffset(125, 36)
-    b.Position = UDim2.fromOffset(x, y)
-    b.BackgroundColor3 = color
-    b.TextColor3 = Color3.new(1, 1, 1)
-    b.Text = text
-    b.TextSize = 13
-    b.Font = Enum.Font.GothamBold
-    b.Parent = panel
+-- Music
+local music = Instance.new("Sound")
+music.Name = "TrickMusic"
+music.SoundId = MUSIC_ID
+music.Looped = true
+music.Volume = 0.5
+music.Parent = gui
 
-    Instance.new("UICorner", b).CornerRadius =
-        UDim.new(0, 7)
+local musicButton
 
-    b.Activated:Connect(callback)
-    return b
-end
+local function stopAnimation()
+    running = false
+    cycleToken += 1
 
--- STOP TRICK
-local function stopTrick()
-    active = false
-
-    if connection then
-        connection:Disconnect()
-        connection = nil
+    if animationConnection then
+        animationConnection:Disconnect()
+        animationConnection = nil
     end
 
-    if humanoid and humanoid.Parent then
-        humanoid.AutoRotate = true
-    end
-
-    status.Text = "Status: Stopped"
+    status.Text = "Stopped"
 end
 
--- START TRICK
-local function startTrick()
-    if active then return end
+local function startAnimation()
+    stopAnimation()
 
-    character = player.Character
-    if not character then return end
-
-    humanoid = character:FindFirstChildOfClass("Humanoid")
-    root = character:FindFirstChild("HumanoidRootPart")
-
-    if not humanoid or not root or humanoid.Health <= 0 then
-        status.Text = "Status: Character unavailable"
+    local character = player.Character
+    if not character then
+        status.Text = "Character not found"
         return
     end
 
-    local height = math.clamp(tonumber(heightBox.Text) or 2, 0, 100)
-    local speed = math.clamp(tonumber(speedBox.Text) or 0, 0, 100)
-    local turnSpeed = math.clamp(tonumber(turnBox.Text) or 360, 0, 1440)
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local root = character:FindFirstChild("HumanoidRootPart")
 
-    startPosition = root.Position
-    startRotation = root.CFrame.Rotation
-    elapsed = 0
-    angle = 0
+    if not humanoid or not root or humanoid.Health <= 0 then
+        status.Text = "Character not ready"
+        return
+    end
 
-    humanoid.AutoRotate = false
-    active = true
-    status.Text = "Status: Trick active"
+    local height = math.clamp(
+        tonumber(heightInput.Text) or 5, 0, 30
+    )
 
-    connection = RunService.RenderStepped:Connect(function(dt)
-        if not active or not root.Parent or humanoid.Health <= 0 then
-            stopTrick()
+    local speed = math.clamp(
+        tonumber(speedInput.Text) or 1080, 1, 5000
+    )
+
+    local spins = math.clamp(
+        math.floor(tonumber(spinsInput.Text) or 15), 1, 100
+    )
+
+    local riseTime = RISE_TIME
+    local spinTime = (spins * 360) / speed
+    local fallTime = FALL_TIME
+
+    local startCFrame = root.CFrame
+    local startPosition = startCFrame.Position
+    local startRotation = startCFrame - startPosition
+
+    running = true
+    cycleToken += 1
+    local myToken = cycleToken
+
+    status.Text = "Trick running..."
+
+    local elapsed = 0
+
+    animationConnection = RunService.RenderStepped:Connect(function(dt)
+        if not running or myToken ~= cycleToken then
+            return
+        end
+
+        if not character.Parent or humanoid.Health <= 0 then
+            stopAnimation()
             return
         end
 
         elapsed += dt
-        angle += math.rad(turnSpeed) * dt
 
-        -- Keep movement straight, independent of spin.
-        local forward = startRotation.LookVector * speed * elapsed
-        local rise = math.min(elapsed / 0.5, 1) * height
+        local total = riseTime + spinTime + fallTime
+        if elapsed >= total then
+            root.CFrame = startCFrame
+            elapsed = 0
+        end
 
-        local position = startPosition
-            + forward
-            + Vector3.new(0, rise, 0)
+        local y = 0
+        local angle = 0
 
-        root.CFrame = CFrame.new(position)
+        if elapsed < riseTime then
+            local t = elapsed / riseTime
+            local smooth = t * t * (3 - 2 * t)
+            y = height * smooth
+
+        elseif elapsed < riseTime + spinTime then
+            local t = (elapsed - riseTime) / spinTime
+            y = height
+            angle = math.rad(spins * 360 * t)
+
+        else
+            local t = (elapsed - riseTime - spinTime) / fallTime
+            local smooth = t * t * (3 - 2 * t)
+            y = height * (1 - smooth)
+            angle = math.rad(spins * 360)
+        end
+
+        local position = startPosition + Vector3.new(0, y, 0)
+
+        root.CFrame =
+            CFrame.new(position)
             * CFrame.Angles(0, angle, 0)
             * startRotation
     end)
 end
 
-makeButton("START TRICK", Color3.fromRGB(30, 155, 90),
-    10, 238, startTrick)
+makeButton(
+    "▶ START",
+    242,
+    Color3.fromRGB(30, 145, 80),
+    startAnimation
+)
 
-makeButton("STOP", Color3.fromRGB(195, 55, 65),
-    150, 238, stopTrick)
+makeButton(
+    "■ STOP",
+    242,
+    Color3.fromRGB(175, 55, 55),
+    stopAnimation
+)
 
--- MUSIC BUTTON 🎵
-local musicButton = makeButton(
-    "▶ PLAY MUSIC",
-    Color3.fromRGB(110, 70, 180),
-    10, 285,
+musicButton = makeButton(
+    "♫ PLAY MUSIC",
+    285,
+    Color3.fromRGB(65, 90, 180),
     function()
         if music.IsPlaying then
             music:Pause()
-            musicButton.Text = "▶ PLAY MUSIC"
+            musicButton.Text = "♫ PLAY MUSIC"
         else
+            local volume = math.clamp(
+                tonumber(volumeInput.Text) or 5, 0, 10
+            )
+
+            music.Volume = volume / 10
             music:Play()
-            musicButton.Text = "⏸ PAUSE MUSIC"
+            musicButton.Text = "♫ PAUSE MUSIC"
         end
     end
 )
 
--- VOLUME CONTROL
-local volumeBox = makeInput("Music volume (0-100)", 50, 326)
+local closeButton = makeButton(
+    "CLOSE GUI",
+    327,
+    Color3.fromRGB(75, 75, 85),
+    function()
+        stopAnimation()
+        music:Stop()
+        gui:Destroy()
+    end
+)
 
-volumeBox.FocusLost:Connect(function()
-    local volume = tonumber(volumeBox.Text) or 50
-    music.Volume = math.clamp(volume, 0, 100) / 100
-end)
-
+-- Stop if the character respawns.
 player.CharacterAdded:Connect(function()
-    stopTrick()
+    stopAnimation()
 end)
