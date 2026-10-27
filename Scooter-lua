@@ -1,649 +1,567 @@
 
--- RZR BY LEO | FIXED COMPLETE SCRIPT
--- Put this LocalScript in StarterPlayer > StarterPlayerScripts
+--[[
+    RZR by leo
+    Place this LocalScript in:
+    StarterPlayer > StarterPlayerScripts
+
+    Best tested in your own Roblox Studio experience.
+]]
 
 local Players = game:GetService("Players")
-local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Settings
-local spinSpeed = 1440
-local jumpPower = 70
-local spinCount = 15
+-- Remove the previous copy of this GUI
+local previousGui = playerGui:FindFirstChild("RZR_GUI")
+if previousGui then
+    previousGui:Destroy()
+end
+
+-- SETTINGS
+local spinSpeed = 720
+local launchPower = 70
+local spinCount = 3
 
 local activeTrick = nil
 local trickToken = 0
-local activeHumanoid = nil
+local musicSound = nil
+local draggingSlider = nil
 
-local songs = {
-    ["1 tap"] = "123272377121190",
-    ["Fruity 2.0"] = "102616343336371"
+local MUSIC = {
+    ["1 tap"] = "rbxassetid://123272377121190",
+    ["Fruity 2.0"] = "rbxassetid://102616343336371",
 }
-local songNames = {"1 tap", "Fruity 2.0"}
-local songIndex = 1
 
-local PURPLE = Color3.fromRGB(177, 105, 255)
-local LIGHT = Color3.fromRGB(220, 190, 255)
-local DARK = Color3.fromRGB(19, 15, 30)
-local CARD = Color3.fromRGB(33, 25, 49)
-local BUTTON = Color3.fromRGB(72, 45, 104)
-local ACTIVE = Color3.fromRGB(104, 62, 151)
-local WHITE = Color3.fromRGB(248, 244, 255)
-local MUTED = Color3.fromRGB(174, 160, 195)
-
-local oldGui = playerGui:FindFirstChild("RZR_by_leo")
-if oldGui then oldGui:Destroy() end
+-- COLORS
+local PURPLE = Color3.fromRGB(139, 72, 255)
+local DARK = Color3.fromRGB(22, 17, 36)
+local PANEL = Color3.fromRGB(34, 26, 53)
+local LIGHT = Color3.fromRGB(242, 235, 255)
+local MUTED = Color3.fromRGB(177, 160, 204)
+local GREEN = Color3.fromRGB(100, 255, 177)
+local RED = Color3.fromRGB(255, 111, 145)
 
 -- GUI
 local gui = Instance.new("ScreenGui")
-gui.Name = "RZR_by_leo"
+gui.Name = "RZR_GUI"
 gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
+gui.IgnoreGuiInset = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = playerGui
 
 local panel = Instance.new("Frame")
 panel.Name = "MainPanel"
-panel.Size = UDim2.fromOffset(330, 630)
-panel.Position = UDim2.new(0, 25, 0.5, -315)
+panel.Size = UDim2.fromOffset(340, 570)
+panel.Position = UDim2.new(0, 25, 0.5, -285)
 panel.BackgroundColor3 = DARK
 panel.BorderSizePixel = 0
-panel.ClipsDescendants = true
+panel.Active = true
 panel.Parent = gui
-Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 18)
 
-local outline = Instance.new("UIStroke")
-outline.Color = PURPLE
-outline.Thickness = 1.5
-outline.Parent = panel
+local panelCorner = Instance.new("UICorner")
+panelCorner.CornerRadius = UDim.new(0, 18)
+panelCorner.Parent = panel
+
+local panelStroke = Instance.new("UIStroke")
+panelStroke.Color = PURPLE
+panelStroke.Thickness = 2
+panelStroke.Transparency = 0.15
+panelStroke.Parent = panel
 
 local gradient = Instance.new("UIGradient")
 gradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(39, 25, 59)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 13, 24))
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(39, 25, 64)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(17, 15, 29)),
 })
-gradient.Rotation = 45
+gradient.Rotation = 90
 gradient.Parent = panel
 
-local accent = Instance.new("Frame")
-accent.Size = UDim2.new(1, 0, 0, 4)
-accent.BackgroundColor3 = PURPLE
-accent.BorderSizePixel = 0
-accent.Parent = panel
-
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -65, 0, 36)
-title.Position = UDim2.fromOffset(17, 12)
-title.BackgroundTransparency = 1
-title.Text = "RZR"
-title.TextColor3 = WHITE
-title.Font = Enum.Font.GothamBlack
-title.TextSize = 25
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.Parent = panel
-
-local subtitle = Instance.new("TextLabel")
-subtitle.Size = UDim2.new(1, -65, 0, 20)
-subtitle.Position = UDim2.fromOffset(18, 42)
-subtitle.BackgroundTransparency = 1
-subtitle.Text = "BY LEO  •  TRICK CONTROL"
-subtitle.TextColor3 = LIGHT
-subtitle.Font = Enum.Font.GothamBold
-subtitle.TextSize = 10
-subtitle.TextXAlignment = Enum.TextXAlignment.Left
-subtitle.Parent = panel
-
-local hideButton = Instance.new("TextButton")
-hideButton.Size = UDim2.fromOffset(34, 32)
-hideButton.Position = UDim2.new(1, -47, 0, 17)
-hideButton.BackgroundColor3 = BUTTON
-hideButton.Text = "—"
-hideButton.TextColor3 = WHITE
-hideButton.Font = Enum.Font.GothamBold
-hideButton.TextSize = 18
-hideButton.Parent = panel
-Instance.new("UICorner", hideButton).CornerRadius = UDim.new(0, 9)
-
-local statusCard = Instance.new("Frame")
-statusCard.Size = UDim2.new(1, -28, 0, 42)
-statusCard.Position = UDim2.fromOffset(14, 74)
-statusCard.BackgroundColor3 = CARD
-statusCard.BorderSizePixel = 0
-statusCard.Parent = panel
-Instance.new("UICorner", statusCard).CornerRadius = UDim.new(0, 10)
-
-local statusDot = Instance.new("Frame")
-statusDot.Size = UDim2.fromOffset(9, 9)
-statusDot.Position = UDim2.fromOffset(12, 16)
-statusDot.BackgroundColor3 = Color3.fromRGB(104, 230, 156)
-statusDot.BorderSizePixel = 0
-statusDot.Parent = statusCard
-Instance.new("UICorner", statusDot).CornerRadius = UDim.new(1, 0)
-
-local statusText = Instance.new("TextLabel")
-statusText.Size = UDim2.new(1, -35, 1, 0)
-statusText.Position = UDim2.fromOffset(28, 0)
-statusText.BackgroundTransparency = 1
-statusText.Text = "READY  •  Choose a trick"
-statusText.TextColor3 = LIGHT
-statusText.Font = Enum.Font.GothamMedium
-statusText.TextSize = 11
-statusText.TextXAlignment = Enum.TextXAlignment.Left
-statusText.Parent = statusCard
-
-local function heading(text, y)
+local function makeLabel(parent, text, size, position, fontSize, color)
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -28, 0, 19)
-    label.Position = UDim2.fromOffset(15, y)
     label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = MUTED
+    label.Size = size
+    label.Position = position
     label.Font = Enum.Font.GothamBold
-    label.TextSize = 11
+    label.Text = text
+    label.TextSize = fontSize
+    label.TextColor3 = color or LIGHT
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = panel
+    label.Parent = parent
     return label
 end
 
-local function makeButton(text, y, height, symbol)
+local title = makeLabel(
+    panel, "RZR  /  by leo",
+    UDim2.new(1, -70, 0, 38),
+    UDim2.fromOffset(17, 9), 22, LIGHT
+)
+
+local subtitle = makeLabel(
+    panel, "TRICK CONTROL  •  V1",
+    UDim2.new(1, -30, 0, 18),
+    UDim2.fromOffset(18, 42), 10, MUTED
+)
+
+local function makeButton(parent, text, position, size)
     local button = Instance.new("TextButton")
-    button.Size = UDim2.new(1, -28, 0, height)
-    button.Position = UDim2.fromOffset(14, y)
-    button.BackgroundColor3 = BUTTON
+    button.Size = size
+    button.Position = position
+    button.BackgroundColor3 = PANEL
     button.BorderSizePixel = 0
-    button.Text = ""
+    button.Text = text
+    button.TextColor3 = LIGHT
+    button.TextSize = 13
+    button.Font = Enum.Font.GothamBold
     button.AutoButtonColor = true
     button.Active = true
     button.Selectable = true
-    button.Parent = panel
-    Instance.new("UICorner", button).CornerRadius = UDim.new(0, 11)
+    button.Parent = parent
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 10)
+    corner.Parent = button
 
     local stroke = Instance.new("UIStroke")
     stroke.Color = PURPLE
-    stroke.Transparency = 0.5
+    stroke.Transparency = 0.55
+    stroke.Thickness = 1
     stroke.Parent = button
 
-    local icon = Instance.new("TextLabel")
-    icon.Size = UDim2.fromOffset(32, height)
-    icon.Position = UDim2.fromOffset(7, 0)
-    icon.BackgroundTransparency = 1
-    icon.Text = symbol
-    icon.TextColor3 = LIGHT
-    icon.Font = Enum.Font.GothamBold
-    icon.TextSize = 17
-    icon.Parent = button
-
-    local label = Instance.new("TextLabel")
-    label.Name = "ButtonLabel"
-    label.Size = UDim2.new(1, -48, 1, 0)
-    label.Position = UDim2.fromOffset(40, 0)
-    label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = WHITE
-    label.Font = Enum.Font.GothamBold
-    label.TextSize = 13
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = button
-
-    return button, label
+    return button
 end
 
-heading("TRICK MODES", 127)
+-- Hide/show controls
+local hideButton = makeButton(
+    panel, "—",
+    UDim2.new(1, -48, 0, 12),
+    UDim2.fromOffset(32, 28)
+)
+hideButton.TextSize = 20
 
-local airButton, airLabel = makeButton("Air Spin  •  OFF", 150, 43, "↻")
-local fallButton, fallLabel = makeButton("Air Spin (Fall)  •  OFF", 200, 43, "↑")
-local loopButton, loopLabel = makeButton("Air Loop  •  OFF", 250, 43, "⤴")
+local showButton = makeButton(
+    gui, "RZR",
+    UDim2.fromOffset(20, 120),
+    UDim2.fromOffset(65, 42)
+)
+showButton.Visible = false
+showButton.BackgroundColor3 = PURPLE
 
-heading("MOVEMENT SETTINGS", 302)
+hideButton.MouseButton1Click:Connect(function()
+    panel.Visible = false
+    showButton.Visible = true
+end)
 
--- Sliders
-local function makeSlider(text, y, minVal, maxVal, initial, callback)
-    local holder = Instance.new("Frame")
-    holder.Size = UDim2.new(1, -28, 0, 48)
-    holder.Position = UDim2.fromOffset(14, y)
-    holder.BackgroundColor3 = CARD
-    holder.BorderSizePixel = 0
-    holder.Parent = panel
-    Instance.new("UICorner", holder).CornerRadius = UDim.new(0, 10)
+showButton.MouseButton1Click:Connect(function()
+    panel.Visible = true
+    showButton.Visible = false
+end)
 
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -24, 0, 20)
-    label.Position = UDim2.fromOffset(12, 4)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = WHITE
-    label.Font = Enum.Font.GothamMedium
-    label.TextSize = 11
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = holder
-
-    local bar = Instance.new("TextButton")
-    bar.Size = UDim2.new(1, -24, 0, 7)
-    bar.Position = UDim2.fromOffset(12, 32)
-    bar.BackgroundColor3 = Color3.fromRGB(65, 53, 78)
-    bar.BorderSizePixel = 0
-    bar.Text = ""
-    bar.Parent = holder
-    Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
-
-    local fill = Instance.new("Frame")
-    fill.BackgroundColor3 = PURPLE
-    fill.BorderSizePixel = 0
-    fill.Parent = bar
-    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-
-    local knob = Instance.new("Frame")
-    knob.Size = UDim2.fromOffset(13, 13)
-    knob.AnchorPoint = Vector2.new(0.5, 0.5)
-    knob.BackgroundColor3 = WHITE
-    knob.BorderSizePixel = 0
-    knob.Parent = bar
-    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
-
+-- Draggable panel
+do
     local dragging = false
+    local dragStart
+    local startPosition
+    local dragInput
 
-    local function setX(x)
-        local width = bar.AbsoluteSize.X
-        if width <= 0 then return end
-
-        local ratio = math.clamp(
-            (x - bar.AbsolutePosition.X) / width, 0, 1
-        )
-        local value = math.floor(minVal + ratio * (maxVal - minVal) + 0.5)
-        local actual = (value - minVal) / (maxVal - minVal)
-
-        fill.Size = UDim2.new(actual, 0, 1, 0)
-        knob.Position = UDim2.new(actual, 0, 0.5, 0)
-        label.Text = text .. "     " .. value
-        callback(value)
-    end
-
-    label.Text = text .. "     " .. initial
-
-    local function setInitial()
-        if bar.AbsoluteSize.X > 0 then
-            local ratio = (initial - minVal) / (maxVal - minVal)
-            fill.Size = UDim2.new(ratio, 0, 1, 0)
-            knob.Position = UDim2.new(ratio, 0, 0.5, 0)
-        end
-    end
-    task.defer(setInitial)
-
-    bar.Activated:Connect(function()
-        -- Activated has no pointer coordinates; InputBegan handles mouse/touch.
-    end)
-
-    bar.InputBegan:Connect(function(input)
+    title.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
-            setX(input.Position.X)
+            dragStart = input.Position
+            startPosition = panel.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
         end
     end)
 
-    UIS.InputChanged:Connect(function(input)
-        if dragging and (
-            input.UserInputType == Enum.UserInputType.MouseMovement
-            or input.UserInputType == Enum.UserInputType.Touch
-        ) then
-            setX(input.Position.X)
-        end
-    end)
-
-    UIS.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
+    title.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
             or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input == dragInput
+            or input.UserInputType == Enum.UserInputType.MouseMovement) then
+            local delta = input.Position - dragStart
+            panel.Position = UDim2.new(
+                startPosition.X.Scale,
+                startPosition.X.Offset + delta.X,
+                startPosition.Y.Scale,
+                startPosition.Y.Offset + delta.Y
+            )
         end
     end)
 end
 
-makeSlider("SPIN SPEED  •  DEG/SEC", 326, 180, 3600, spinSpeed,
-    function(v) spinSpeed = v end)
-makeSlider("LAUNCH POWER", 380, 20, 150, jumpPower,
-    function(v) jumpPower = v end)
-makeSlider("NUMBER OF SPINS", 434, 1, 30, spinCount,
-    function(v) spinCount = v end)
+-- Section heading
+makeLabel(
+    panel, "TRICKS",
+    UDim2.new(1, -30, 0, 22),
+    UDim2.fromOffset(18, 75), 12, MUTED
+)
 
-heading("MUSIC PLAYER", 489)
+local airButton = makeButton(
+    panel, "AIR SPIN",
+    UDim2.fromOffset(17, 102),
+    UDim2.new(1, -34, 0, 39)
+)
 
-local musicButton, musicLabel = makeButton("Play Music", 511, 37, "♫")
-local songButton, songLabel = makeButton("Song: 1 tap", 555, 37, "♪")
+local fallButton = makeButton(
+    panel, "AIR SPIN (FALL)",
+    UDim2.fromOffset(17, 149),
+    UDim2.new(1, -34, 0, 39)
+)
 
--- Notifications
-local toast = Instance.new("TextLabel")
-toast.Size = UDim2.fromOffset(260, 40)
-toast.Position = UDim2.new(0.5, -130, 0, 35)
-toast.BackgroundColor3 = CARD
-toast.TextColor3 = WHITE
-toast.Font = Enum.Font.GothamBold
-toast.TextSize = 13
-toast.Visible = false
-toast.ZIndex = 10
-toast.Parent = gui
-Instance.new("UICorner", toast).CornerRadius = UDim.new(0, 11)
+local loopButton = makeButton(
+    panel, "AIR LOOP",
+    UDim2.fromOffset(17, 196),
+    UDim2.new(1, -34, 0, 39)
+)
 
-local toastStroke = Instance.new("UIStroke")
-toastStroke.Color = PURPLE
-toastStroke.Parent = toast
+local statusLabel = makeLabel(
+    panel, "STATUS: OFF",
+    UDim2.new(1, -34, 0, 20),
+    UDim2.fromOffset(18, 242), 11, MUTED
+)
 
-local toastToken = 0
-local function notify(message)
-    toastToken += 1
-    local token = toastToken
-    toast.Text = message
-    toast.Visible = true
-    toast.TextTransparency = 0
-    toast.BackgroundTransparency = 0
+local function updateButtons()
+    local buttonData = {
+        {button = airButton, mode = "spin", name = "AIR SPIN"},
+        {button = fallButton, mode = "fall", name = "AIR SPIN (FALL)"},
+        {button = loopButton, mode = "loop", name = "AIR LOOP"},
+    }
 
-    task.delay(2, function()
-        if toastToken ~= token then return end
-        local tween = TweenService:Create(toast, TweenInfo.new(0.2), {
-            TextTransparency = 1,
-            BackgroundTransparency = 1
-        })
-        tween:Play()
-        tween.Completed:Wait()
-        if toastToken == token then
-            toast.Visible = false
-            toast.TextTransparency = 0
-            toast.BackgroundTransparency = 0
+    for _, item in ipairs(buttonData) do
+        if activeTrick == item.mode then
+            item.button.Text = "■  STOP " .. item.name
+            item.button.BackgroundColor3 = PURPLE
+        else
+            item.button.Text = "▶  " .. item.name
+            item.button.BackgroundColor3 = PANEL
         end
-    end)
-end
+    end
 
--- Music player
-local music = Instance.new("Sound")
-music.Name = "RZR_Music"
-music.Volume = 0.5
-music.Looped = true
-music.SoundId = "rbxassetid://" .. songs[songNames[songIndex]]
-music.Parent = gui
-
-musicButton.Activated:Connect(function()
-    if music.IsPlaying then
-        music:Stop()
-        musicLabel.Text = "Play Music"
-        notify("Music stopped")
+    if activeTrick then
+        statusLabel.Text = "STATUS: " .. string.upper(activeTrick) .. " ON"
+        statusLabel.TextColor3 = GREEN
     else
-        music:Play()
-        musicLabel.Text = "Stop Music"
-        notify("Music playing")
+        statusLabel.Text = "STATUS: OFF"
+        statusLabel.TextColor3 = MUTED
     end
-end)
+end
 
-songButton.Activated:Connect(function()
-    songIndex = songIndex % #songNames + 1
-    local name = songNames[songIndex]
-    music.SoundId = "rbxassetid://" .. songs[name]
-    songLabel.Text = "Song: " .. name
-
-    if music.IsPlaying then
-        music:Play()
-    end
-
-    notify("Selected: " .. name)
-end)
-
--- Character
-local function getParts()
+-- CHARACTER HELPERS
+local function getCharacterParts()
     local character = player.Character
-    if not character then return end
+    if not character then
+        return nil, nil, nil
+    end
 
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     local root = character:FindFirstChild("HumanoidRootPart")
 
     if not humanoid or not root or humanoid.Health <= 0 then
-        return
+        return nil, nil, nil
     end
 
     return character, humanoid, root
 end
 
-local function updateButtons()
-    local states = {
-        {airButton, airLabel, "Air Spin", "air"},
-        {fallButton, fallLabel, "Air Spin (Fall)", "fall"},
-        {loopButton, loopLabel, "Air Loop", "loop"}
-    }
-
-    for _, item in ipairs(states) do
-        local button, label, name, mode = item
-        local on = activeTrick == mode
-
-        label.Text = name .. (on and "  •  ON" or "  •  OFF")
-        button.BackgroundColor3 = on and ACTIVE or BUTTON
-        button:SetAttribute("Active", on)
-    end
-
-    statusDot.BackgroundColor3 = activeTrick
-        and Color3.fromRGB(255, 198, 91)
-        or Color3.fromRGB(104, 230, 156)
-
-    statusText.Text = activeTrick
-        and "TRICK ACTIVE  •  Press again to stop"
-        or "READY  •  Choose a trick"
-end
-
-local function stopTrick(message)
+-- STOP CURRENT TRICK
+local function stopTrick()
     trickToken += 1
     activeTrick = nil
-
-    if activeHumanoid and activeHumanoid.Parent then
-        activeHumanoid.AutoRotate = true
-    end
-    activeHumanoid = nil
-
     updateButtons()
-    if message then notify(message) end
 end
 
+-- START / TOGGLE TRICK
 local function startTrick(mode)
-    -- Pressing the same button again stops the trick.
+    -- Pressing the active button turns it off
     if activeTrick == mode then
-        stopTrick("Trick stopped")
-        return
-    end
-
-    -- Cancel any other active trick.
-    if activeTrick then
         stopTrick()
-    end
-
-    local _, humanoid, root = getParts()
-    if not humanoid or not root then
-        notify("Character not ready")
         return
     end
 
+    -- Switching tricks invalidates the previous loop
     trickToken += 1
     local myToken = trickToken
-
     activeTrick = mode
-    activeHumanoid = humanoid
-    humanoid.AutoRotate = false
     updateButtons()
-    notify(mode == "loop" and "Air Loop started" or "Trick loop started")
 
     task.spawn(function()
         while activeTrick == mode and trickToken == myToken do
-            local _, currentHumanoid, currentRoot = getParts()
-            if not currentHumanoid or not currentRoot then
-                break
+            local character, humanoid, root = getCharacterParts()
+
+            if not character or not humanoid or not root then
+                task.wait(0.25)
+                continue
             end
 
-            -- Start a new jump when grounded.
-            if currentHumanoid.FloorMaterial ~= Enum.Material.Air then
-                if mode == "fall" then
-                    currentRoot.AssemblyLinearVelocity = Vector3.new(
-                        currentRoot.AssemblyLinearVelocity.X,
-                        jumpPower,
-                        currentRoot.AssemblyLinearVelocity.Z
-                    )
-                else
-                    currentHumanoid.Jump = true
-                    currentHumanoid:ChangeState(
-                        Enum.HumanoidStateType.Jumping
-                    )
+            -- Trigger a jump so the trick can start
+            humanoid.Jump = true
+            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+
+            -- Give the character launch power
+            local currentVelocity = root.AssemblyLinearVelocity
+            root.AssemblyLinearVelocity = Vector3.new(
+                currentVelocity.X,
+                launchPower,
+                currentVelocity.Z
+            )
+
+            -- Wait briefly for the character to leave the ground
+            local waitStart = os.clock()
+            while humanoid.Health > 0
+                and root.Parent
+                and humanoid.FloorMaterial ~= Enum.Material.Air
+                and os.clock() - waitStart < 1 do
+
+                if trickToken ~= myToken then
+                    return
                 end
 
-                -- Give Roblox a moment to register the jump.
-                local startWait = os.clock()
-                while currentHumanoid.FloorMaterial ~= Enum.Material.Air
-                    and os.clock() - startWait < 0.5
-                    and activeTrick == mode
-                    and trickToken == myToken do
-                    RunService.Heartbeat:Wait()
-                end
+                RunService.Heartbeat:Wait()
             end
 
-            if activeTrick ~= mode or trickToken ~= myToken then
-                break
-            end
-
-            local duration = (360 * spinCount) / math.max(spinSpeed, 1)
+            -- Spin for the configured number of rotations
+            local angle = 0
+            local totalAngle = math.rad(360 * spinCount)
+            local maxDuration = math.max(1, (360 * spinCount) / math.max(spinSpeed, 1))
             local elapsed = 0
-            local baseCFrame = currentRoot.CFrame
-            local basePosition = currentRoot.Position
 
-            -- Run one rotation sequence.
-            while elapsed < duration
+            while elapsed < maxDuration
+                and angle < totalAngle
                 and activeTrick == mode
-                and trickToken == myToken do
+                and trickToken == myToken
+                and humanoid.Health > 0
+                and root.Parent do
 
                 local dt = RunService.Heartbeat:Wait()
-                if not currentRoot.Parent or currentHumanoid.Health <= 0 then
-                    break
-                end
+                elapsed += dt
 
-                elapsed = math.min(elapsed + dt, duration)
-                local angle = math.rad(360 * spinCount)
-                    * (elapsed / duration)
+                local step = math.rad(spinSpeed) * dt
+                angle = math.min(angle + step, totalAngle)
 
+                local position = root.Position
                 local rotation
+
                 if mode == "loop" then
+                    -- Front-flip style rotation
                     rotation = CFrame.Angles(angle, 0, 0)
+                elseif mode == "fall" then
+                    -- Spin while descending
+                    rotation = CFrame.Angles(0, angle, 0)
                 else
+                    -- Standard air spin
                     rotation = CFrame.Angles(0, angle, 0)
                 end
 
-                currentRoot.CFrame =
-                    CFrame.new(currentRoot.Position)
-                    * (baseCFrame - basePosition)
-                    * rotation
+                root.CFrame = CFrame.new(position) * rotation
             end
 
-            if activeTrick ~= mode or trickToken ~= myToken then
-                break
-            end
+            -- Wait until landing before repeating
+            while activeTrick == mode
+                and trickToken == myToken
+                and humanoid.Health > 0
+                and root.Parent
+                and humanoid.FloorMaterial == Enum.Material.Air do
 
-            -- Wait for landing before starting the next jump.
-            while currentHumanoid.Parent
-                and currentHumanoid.Health > 0
-                and currentHumanoid.FloorMaterial == Enum.Material.Air
-                and activeTrick == mode
-                and trickToken == myToken do
                 RunService.Heartbeat:Wait()
             end
 
             if activeTrick == mode and trickToken == myToken then
-                task.wait(0.1)
+                task.wait(0.12)
             end
-        end
-
-        if trickToken == myToken then
-            activeTrick = nil
-            if activeHumanoid and activeHumanoid.Parent then
-                activeHumanoid.AutoRotate = true
-            end
-            activeHumanoid = nil
-            updateButtons()
-            notify("Trick stopped")
         end
     end)
 end
 
--- Button connections
-airButton.Activated:Connect(function()
-    startTrick("air")
+-- BUTTON CONNECTIONS
+-- MouseButton1Click is used explicitly for reliable mouse/touch button activation.
+airButton.MouseButton1Click:Connect(function()
+    startTrick("spin")
 end)
 
-fallButton.Activated:Connect(function()
+fallButton.MouseButton1Click:Connect(function()
     startTrick("fall")
 end)
 
-loopButton.Activated:Connect(function()
+loopButton.MouseButton1Click:Connect(function()
     startTrick("loop")
 end)
 
--- Drag window by title
-local dragging = false
-local dragStart
-local panelStart
+-- SETTINGS SECTION
+makeLabel(
+    panel, "SETTINGS",
+    UDim2.new(1, -30, 0, 20),
+    UDim2.fromOffset(18, 275), 12, MUTED
+)
 
-title.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        panelStart = panel.Position
-    end
-end)
+local function makeSlider(labelText, y, minValue, maxValue, initialValue, callback)
+    local label = makeLabel(
+        panel, labelText .. ": " .. tostring(initialValue),
+        UDim2.new(1, -34, 0, 20),
+        UDim2.fromOffset(18, y), 12, LIGHT
+    )
 
-UIS.InputChanged:Connect(function(input)
-    if dragging and (
-        input.UserInputType == Enum.UserInputType.MouseMovement
-        or input.UserInputType == Enum.UserInputType.Touch
-    ) then
-        local delta = input.Position - dragStart
-        panel.Position = UDim2.new(
-            panelStart.X.Scale,
-            panelStart.X.Offset + delta.X,
-            panelStart.Y.Scale,
-            panelStart.Y.Offset + delta.Y
+    local bar = Instance.new("TextButton")
+    bar.Name = labelText:gsub("%s+", "") .. "Slider"
+    bar.Text = ""
+    bar.AutoButtonColor = false
+    bar.Active = true
+    bar.Size = UDim2.new(1, -36, 0, 12)
+    bar.Position = UDim2.fromOffset(18, y + 25)
+    bar.BackgroundColor3 = Color3.fromRGB(61, 48, 82)
+    bar.BorderSizePixel = 0
+    bar.Parent = panel
+
+    local barCorner = Instance.new("UICorner")
+    barCorner.CornerRadius = UDim.new(1, 0)
+    barCorner.Parent = bar
+
+    local fill = Instance.new("Frame")
+    fill.BorderSizePixel = 0
+    fill.BackgroundColor3 = PURPLE
+    fill.Size = UDim2.new(
+        (initialValue - minValue) / (maxValue - minValue), 0, 1, 0
+    )
+    fill.Parent = bar
+
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(1, 0)
+    fillCorner.Parent = fill
+
+    local function setFromX(x)
+        local width = math.max(bar.AbsoluteSize.X, 1)
+        local ratio = math.clamp(
+            (x - bar.AbsolutePosition.X) / width, 0, 1
         )
+        local value = math.floor(
+            minValue + ratio * (maxValue - minValue) + 0.5
+        )
+
+        fill.Size = UDim2.new(ratio, 0, 1, 0)
+        label.Text = labelText .. ": " .. tostring(value)
+        callback(value)
+    end
+
+    bar.MouseButton1Down:Connect(function()
+        draggingSlider = bar
+        setFromX(UserInputService:GetMouseLocation().X)
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if draggingSlider == bar and (
+            input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch
+        ) then
+            setFromX(input.Position.X)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            if draggingSlider == bar then
+                draggingSlider = nil
+            end
+        end
+    end)
+
+    -- Also support touch input directly on the slider
+    bar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            draggingSlider = bar
+            setFromX(input.Position.X)
+        end
+    end)
+end
+
+makeSlider("Spin Speed", 304, 180, 3600, spinSpeed, function(value)
+    spinSpeed = value
+end)
+
+makeSlider("Launch Power", 365, 20, 150, launchPower, function(value)
+    launchPower = value
+end)
+
+makeSlider("Spin Count", 426, 1, 30, spinCount, function(value)
+    spinCount = value
+end)
+
+-- MUSIC SECTION
+makeLabel(
+    panel, "MUSIC",
+    UDim2.new(1, -30, 0, 20),
+    UDim2.fromOffset(18, 478), 12, MUTED
+)
+
+local musicOne = makeButton(
+    panel, "▶  1 TAP",
+    UDim2.fromOffset(18, 505),
+    UDim2.new(0.5, -23, 0, 36)
+)
+
+local musicTwo = makeButton(
+    panel, "▶  FRUITY 2.0",
+    UDim2.new(0.5, 5, 0, 505),
+    UDim2.new(0.5, -23, 0, 36)
+)
+
+local stopMusicButton = makeButton(
+    panel, "STOP MUSIC",
+    UDim2.fromOffset(18, 545),
+    UDim2.new(1, -36, 0, 20)
+)
+stopMusicButton.TextSize = 10
+
+local function playMusic(trackName)
+    if musicSound then
+        musicSound:Stop()
+        musicSound:Destroy()
+        musicSound = nil
+    end
+
+    local sound = Instance.new("Sound")
+    sound.Name = "RZR_Music"
+    sound.SoundId = MUSIC[trackName]
+    sound.Volume = 0.5
+    sound.Looped = true
+    sound.Parent = gui
+    musicSound = sound
+
+    sound:Play()
+end
+
+musicOne.MouseButton1Click:Connect(function()
+    playMusic("1 tap")
+end)
+
+musicTwo.MouseButton1Click:Connect(function()
+    playMusic("Fruity 2.0")
+end)
+
+stopMusicButton.MouseButton1Click:Connect(function()
+    if musicSound then
+        musicSound:Stop()
+        musicSound:Destroy()
+        musicSound = nil
     end
 end)
 
-UIS.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
-end)
-
--- Hide/show
-local showButton = Instance.new("TextButton")
-showButton.Size = UDim2.fromOffset(125, 40)
-showButton.Position = UDim2.fromOffset(20, 100)
-showButton.BackgroundColor3 = CARD
-showButton.Text = "✦  RZR by leo"
-showButton.TextColor3 = WHITE
-showButton.Font = Enum.Font.GothamBold
-showButton.TextSize = 13
-showButton.Visible = false
-showButton.Parent = gui
-Instance.new("UICorner", showButton).CornerRadius = UDim.new(0, 11)
-
-local showStroke = Instance.new("UIStroke")
-showStroke.Color = PURPLE
-showStroke.Parent = showButton
-
-hideButton.Activated:Connect(function()
-    panel.Visible = false
-    showButton.Visible = true
-end)
-
-showButton.Activated:Connect(function()
-    panel.Visible = true
-    showButton.Visible = false
-end)
-
+-- Stop the active trick if the character respawns
 player.CharacterAdded:Connect(function()
     stopTrick()
 end)
 
 updateButtons()
-notify("RZR by leo loaded")
+print("RZR by leo loaded successfully.")
