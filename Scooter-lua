@@ -1,7 +1,6 @@
 
--- RZR by leo
--- LocalScript: StarterPlayer > StarterPlayerScripts
--- For a Roblox Studio experience you own.
+-- RZR by leo | Roblox Studio
+-- Place in StarterPlayer > StarterPlayerScripts
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -14,16 +13,20 @@ local airspinEnabled = false
 local catapultEnabled = false
 local launchPower = 120
 local spinSpeed = 1440
-local spinCount = 15
 local spinning = false
 local spinAngle = 0
+local musicPlaying = false
+local songIndex = 1
+local dragConnections = {}
 
 local songs = {
-    ["1 tap"] = "123272377121190",
-    ["Fruity 2.0"] = "102616343336371"
+    {name = "1 tap", id = "123272377121190"},
+    {name = "Fruity 2.0", id = "102616343336371"},
 }
-local songNames = {"1 tap", "Fruity 2.0"}
-local songIndex = 1
+
+-- Clean up duplicate GUI if the script restarts
+local oldGui = playerGui:FindFirstChild("RZR_by_leo")
+if oldGui then oldGui:Destroy() end
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "RZR_by_leo"
@@ -31,85 +34,121 @@ gui.ResetOnSpawn = false
 gui.Parent = playerGui
 
 local panel = Instance.new("Frame")
-panel.Size = UDim2.fromOffset(280, 330)
-panel.Position = UDim2.new(0, 24, 0.3, 0)
-panel.BackgroundColor3 = Color3.fromRGB(20, 18, 32)
+panel.Size = UDim2.fromOffset(280, 350)
+panel.Position = UDim2.new(0, 24, 0.25, 0)
+panel.BackgroundColor3 = Color3.fromRGB(20, 15, 35)
+panel.BorderSizePixel = 0
 panel.Parent = gui
 Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 14)
 
 local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(160, 100, 255)
+stroke.Color = Color3.fromRGB(175, 105, 255)
 stroke.Thickness = 2
 stroke.Parent = panel
 
+local gradient = Instance.new("UIGradient")
+gradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 22, 60)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 12, 27))
+})
+gradient.Rotation = 45
+gradient.Parent = panel
+
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -48, 0, 36)
-title.Position = UDim2.fromOffset(12, 4)
+title.Size = UDim2.new(1, -55, 0, 38)
+title.Position = UDim2.fromOffset(12, 3)
 title.BackgroundTransparency = 1
 title.Text = "✦ RZR by leo"
-title.TextColor3 = Color3.fromRGB(225, 205, 255)
+title.TextColor3 = Color3.fromRGB(230, 210, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 19
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = panel
 
-local hide = Instance.new("TextButton")
-hide.Size = UDim2.fromOffset(30, 28)
-hide.Position = UDim2.new(1, -38, 0, 7)
-hide.Text = "—"
-hide.Parent = panel
-
-local toast = Instance.new("TextLabel")
-toast.Size = UDim2.fromOffset(240, 34)
-toast.Position = UDim2.new(0.5, -120, 0, 25)
-toast.BackgroundColor3 = Color3.fromRGB(45, 30, 70)
-toast.TextColor3 = Color3.new(1, 1, 1)
-toast.Font = Enum.Font.GothamBold
-toast.TextSize = 14
-toast.Visible = false
-toast.Parent = gui
-Instance.new("UICorner", toast).CornerRadius = UDim.new(0, 9)
-
-local function notify(message)
-    toast.Text = message
-    toast.Visible = true
-    task.delay(2, function()
-        toast.Visible = false
-    end)
-end
-
 local function makeButton(text, y)
     local b = Instance.new("TextButton")
     b.Size = UDim2.new(1, -24, 0, 36)
     b.Position = UDim2.fromOffset(12, y)
-    b.BackgroundColor3 = Color3.fromRGB(75, 45, 125)
+    b.BackgroundColor3 = Color3.fromRGB(83, 48, 135)
+    b.BorderSizePixel = 0
     b.TextColor3 = Color3.new(1, 1, 1)
     b.Font = Enum.Font.GothamBold
     b.TextSize = 14
     b.Text = text
+    b.AutoButtonColor = true
     b.Parent = panel
     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+
+    local s = Instance.new("UIStroke")
+    s.Color = Color3.fromRGB(160, 105, 235)
+    s.Thickness = 1
+    s.Transparency = 0.35
+    s.Parent = b
+
     return b
 end
 
-local airButton = makeButton("Airspin: OFF", 48)
-local catButton = makeButton("Catapult: OFF", 90)
-local songButton = makeButton("♫ 1 tap", 132)
-local musicButton = makeButton("▶ Play music", 174)
+local hide = makeButton("—", 7)
+hide.Size = UDim2.fromOffset(30, 27)
+hide.Position = UDim2.new(1, -38, 0, 7)
 
+local airButton = makeButton("Airspin: OFF", 47)
+local catButton = makeButton("Catapult: OFF", 89)
+local songButton = makeButton("♫ 1 tap", 131)
+local musicButton = makeButton("▶ Play music", 173)
+
+local toast = Instance.new("TextLabel")
+toast.Size = UDim2.fromOffset(240, 34)
+toast.Position = UDim2.new(0.5, -120, 0, 24)
+toast.BackgroundColor3 = Color3.fromRGB(45, 25, 75)
+toast.TextColor3 = Color3.new(1, 1, 1)
+toast.Font = Enum.Font.GothamBold
+toast.TextSize = 14
+toast.Visible = false
+toast.ZIndex = 10
+toast.Parent = gui
+Instance.new("UICorner", toast).CornerRadius = UDim.new(0, 9)
+
+local toastId = 0
+local function notify(message)
+    toastId += 1
+    local id = toastId
+    toast.Text = message
+    toast.Visible = true
+
+    task.delay(2, function()
+        if toastId == id then
+            toast.Visible = false
+        end
+    end)
+end
+
+-- Music
 local sound = Instance.new("Sound")
 sound.Name = "RZR_Music"
-sound.SoundId = "rbxassetid://" .. songs[songNames[songIndex]]
+sound.SoundId = "rbxassetid://" .. songs[songIndex].id
 sound.Volume = 0.5
 sound.Looped = true
 sound.Parent = gui
 
+local function getCharacterParts()
+    local character = player.Character
+    if not character then return end
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local root = character:FindFirstChild("HumanoidRootPart")
+
+    if not humanoid or not root then return end
+    return character, humanoid, root
+end
+
+-- Sliders
 local function makeSlider(label, y, minV, maxV, initial, callback)
     local txt = Instance.new("TextLabel")
     txt.Size = UDim2.new(1, -24, 0, 20)
     txt.Position = UDim2.fromOffset(12, y)
     txt.BackgroundTransparency = 1
-    txt.TextColor3 = Color3.new(1, 1, 1)
+    txt.TextColor3 = Color3.fromRGB(240, 230, 255)
     txt.Font = Enum.Font.Gotham
     txt.TextSize = 12
     txt.TextXAlignment = Enum.TextXAlignment.Left
@@ -119,20 +158,28 @@ local function makeSlider(label, y, minV, maxV, initial, callback)
     bar.Size = UDim2.new(1, -24, 0, 10)
     bar.Position = UDim2.fromOffset(12, y + 22)
     bar.Text = ""
+    bar.BorderSizePixel = 0
     bar.BackgroundColor3 = Color3.fromRGB(65, 55, 80)
     bar.Parent = panel
     Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
 
     local fill = Instance.new("Frame")
-    fill.BackgroundColor3 = Color3.fromRGB(190, 120, 255)
+    fill.Size = UDim2.fromScale((initial - minV) / (maxV - minV), 1)
+    fill.BackgroundColor3 = Color3.fromRGB(195, 125, 255)
     fill.BorderSizePixel = 0
     fill.Parent = bar
     Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
 
     local value = initial
+    txt.Text = label .. ": " .. value
+    callback(value)
+
     local function update(x)
+        local width = bar.AbsoluteSize.X
+        if width <= 0 then return end
+
         local ratio = math.clamp(
-            (x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1
+            (x - bar.AbsolutePosition.X) / width, 0, 1
         )
         value = math.floor(minV + ratio * (maxV - minV))
         fill.Size = UDim2.fromScale(ratio, 1)
@@ -140,35 +187,26 @@ local function makeSlider(label, y, minV, maxV, initial, callback)
         callback(value)
     end
 
-    task.defer(function()
-        update(bar.AbsolutePosition.X + bar.AbsoluteSize.X *
-            ((initial - minV) / (maxV - minV)))
+    bar.Activated:Connect(function()
+        -- Touch-friendly click behavior; dragging is handled below.
     end)
 
-    local dragging = false
     bar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
             update(input.Position.X)
         end
     end)
 
-    UIS.InputChanged:Connect(function(input)
-        if dragging and (
-            input.UserInputType == Enum.UserInputType.MouseMovement
-            or input.UserInputType == Enum.UserInputType.Touch
-        ) then
-            update(input.Position.X)
-        end
-    end)
-
-    UIS.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
+    local moveConnection = UIS.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
             or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
+            if UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+                update(input.Position.X)
+            end
         end
     end)
+    table.insert(dragConnections, moveConnection)
 end
 
 makeSlider("Catapult power", 222, 40, 220, launchPower,
@@ -177,19 +215,20 @@ makeSlider("Catapult power", 222, 40, 220, launchPower,
 makeSlider("Spin speed", 274, 360, 3600, spinSpeed,
     function(v) spinSpeed = v end)
 
--- Airborne-only spinning.
-RunService.RenderStepped:Connect(function(dt)
-    local character = player.Character
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    local root = character and character:FindFirstChild("HumanoidRootPart")
-    if not humanoid or not root then return end
+-- Airspin: continuous forward flips while airborne.
+RunService.Heartbeat:Connect(function(dt)
+    local _, humanoid, root = getCharacterParts()
+    if not humanoid or not root then
+        spinning = false
+        return
+    end
 
     local airborne = humanoid.FloorMaterial == Enum.Material.Air
-    if airspinEnabled and airborne then
-        spinAngle += math.rad(spinSpeed) * dt
-        root.CFrame = CFrame.new(root.Position)
-            * CFrame.Angles(0, spinAngle, 0)
-            * (root.CFrame - root.Position)
+    spinning = airborne and (airspinEnabled or catapultEnabled)
+
+    if spinning then
+        root.CFrame = root.CFrame
+            * CFrame.Angles(0, 0, math.rad(spinSpeed) * dt)
     end
 end)
 
@@ -204,47 +243,78 @@ catButton.Activated:Connect(function()
     catButton.Text = catapultEnabled and "Catapult: ON" or "Catapult: OFF"
     notify(catButton.Text)
 
-    if catapultEnabled then
-        local character = player.Character
-        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-        local root = character and character:FindFirstChild("HumanoidRootPart")
-        if humanoid and root then
-            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            root.AssemblyLinearVelocity = Vector3.new(
-                root.AssemblyLinearVelocity.X,
-                launchPower,
-                root.AssemblyLinearVelocity.Z
-            )
-        end
+    if not catapultEnabled then return end
+
+    local _, humanoid, root = getCharacterParts()
+    if not humanoid or not root then
+        catapultEnabled = false
+        catButton.Text = "Catapult: OFF"
+        notify("Character not ready")
+        return
     end
+
+    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+
+    root.AssemblyLinearVelocity = Vector3.new(
+        root.AssemblyLinearVelocity.X,
+        launchPower,
+        root.AssemblyLinearVelocity.Z
+    )
+
+    -- Automatically switch off after landing.
+    task.spawn(function()
+        local startTime = os.clock()
+        while catapultEnabled and os.clock() - startTime < 8 do
+            task.wait(0.1)
+            local _, currentHumanoid = getCharacterParts()
+            if currentHumanoid
+                and currentHumanoid.FloorMaterial ~= Enum.Material.Air
+                and os.clock() - startTime > 0.4 then
+                break
+            end
+        end
+
+        catapultEnabled = false
+        catButton.Text = "Catapult: OFF"
+    end)
 end)
 
 songButton.Activated:Connect(function()
-    songIndex = songIndex % #songNames + 1
-    local name = songNames[songIndex]
-    sound.SoundId = "rbxassetid://" .. songs[name]
-    songButton.Text = "♫ " .. name
-    if sound.IsPlaying then sound:Play() end
-    notify("Song: " .. name)
+    songIndex = songIndex % #songs + 1
+    sound.SoundId = "rbxassetid://" .. songs[songIndex].id
+    songButton.Text = "♫ " .. songs[songIndex].name
+
+    if musicPlaying then
+        sound:Play()
+    end
+
+    notify("Song: " .. songs[songIndex].name)
 end)
 
 musicButton.Activated:Connect(function()
-    if sound.IsPlaying then
+    if musicPlaying then
+        musicPlaying = false
         sound:Stop()
         musicButton.Text = "▶ Play music"
     else
+        musicPlaying = true
         sound:Play()
         musicButton.Text = "■ Stop music"
     end
 end)
 
--- Hide/show panel.
+-- Hide / show
 local show = Instance.new("TextButton")
-show.Size = UDim2.fromOffset(105, 36)
+show.Size = UDim2.fromOffset(120, 36)
 show.Position = UDim2.fromOffset(18, 100)
+show.BackgroundColor3 = Color3.fromRGB(83, 48, 135)
+show.TextColor3 = Color3.new(1, 1, 1)
+show.Font = Enum.Font.GothamBold
+show.TextSize = 13
 show.Text = "✦ RZR by leo"
 show.Visible = false
 show.Parent = gui
+Instance.new("UICorner", show).CornerRadius = UDim.new(0, 9)
 
 hide.Activated:Connect(function()
     panel.Visible = false
@@ -256,8 +326,11 @@ show.Activated:Connect(function()
     show.Visible = false
 end)
 
--- Drag panel by the title.
-local dragging, dragStart, startPos = false
+-- Drag by title
+local dragging = false
+local dragStart
+local startPos
+
 title.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
@@ -286,3 +359,11 @@ UIS.InputEnded:Connect(function(input)
         dragging = false
     end
 end)
+
+player.CharacterAdded:Connect(function()
+    catapultEnabled = false
+    spinning = false
+    catButton.Text = "Catapult: OFF"
+end)
+
+notify("RZR by leo loaded 💜")
