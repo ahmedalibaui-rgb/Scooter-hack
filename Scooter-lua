@@ -3,14 +3,17 @@
 -- LocalScript: StarterPlayer > StarterPlayerScripts
 
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
+local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-local spinSpeed, jumpPower, spinCount = 1440, 70, 15
-local busy, hidden = false, false
+local spinSpeed = 1440
+local jumpPower = 70
+local spinCount = 15
+local activeTrick = nil
+local trickToken = 0
 
 local songs = {
     ["1 tap"] = "123272377121190",
@@ -35,13 +38,13 @@ panel.BorderSizePixel = 0
 panel.Parent = gui
 Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 14)
 
-local panelGradient = Instance.new("UIGradient")
-panelGradient.Color = ColorSequence.new({
+local gradient = Instance.new("UIGradient")
+gradient.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(43, 26, 70)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 12, 27))
 })
-panelGradient.Rotation = 45
-panelGradient.Parent = panel
+gradient.Rotation = 45
+gradient.Parent = panel
 
 local outline = Instance.new("UIStroke")
 outline.Color = Color3.fromRGB(175, 105, 255)
@@ -49,7 +52,7 @@ outline.Thickness = 2
 outline.Parent = panel
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -55, 0, 36)
+title.Size = UDim2.new(1, -50, 0, 36)
 title.Position = UDim2.fromOffset(12, 2)
 title.BackgroundTransparency = 1
 title.Text = "✦ RZR by leo"
@@ -65,29 +68,26 @@ local function makeButton(text, y, height)
     b.Position = UDim2.fromOffset(12, y)
     b.BackgroundColor3 = Color3.fromRGB(79, 44, 126)
     b.BorderSizePixel = 0
-    b.TextColor3 = Color3.fromRGB(255, 255, 255)
+    b.TextColor3 = Color3.new(1, 1, 1)
     b.Font = Enum.Font.GothamBold
     b.TextSize = 14
     b.Text = text
-    b.AutoButtonColor = true
     b.Parent = panel
     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
 
     local edge = Instance.new("UIStroke")
     edge.Color = Color3.fromRGB(171, 116, 255)
-    edge.Thickness = 1
     edge.Transparency = 0.35
     edge.Parent = b
-
     return b
 end
 
-local hideButton = makeButton("—", 6, 27)
+local hideButton = makeButton("—", 5, 27)
 hideButton.Size = UDim2.fromOffset(30, 27)
 hideButton.Position = UDim2.new(1, -38, 0, 5)
 
-local spinButton = makeButton("✦ Air Spin", 42)
-local fallButton = makeButton("✦ Air Spin (Fall)", 81)
+local airButton = makeButton("Air Spin: OFF", 42)
+local fallButton = makeButton("Air Spin (Fall): OFF", 81)
 local musicButton = makeButton("▶ Play Music", 120)
 local songButton = makeButton("♫ Song: 1 tap", 159)
 
@@ -103,17 +103,14 @@ toast.ZIndex = 5
 toast.Parent = gui
 Instance.new("UICorner", toast).CornerRadius = UDim.new(0, 9)
 
-local toastVersion = 0
+local toastToken = 0
 local function notify(message)
-    toastVersion += 1
-    local version = toastVersion
+    toastToken += 1
+    local token = toastToken
     toast.Text = message
     toast.Visible = true
-
     task.delay(2, function()
-        if toastVersion == version then
-            toast.Visible = false
-        end
+        if toastToken == token then toast.Visible = false end
     end)
 end
 
@@ -124,9 +121,17 @@ music.Looped = true
 music.SoundId = "rbxassetid://" .. songs[songNames[songIndex]]
 music.Parent = gui
 
-local function makeSlider(label, y, minValue, maxValue, initial, callback)
-    local value = initial
+local function getParts()
+    local character = player.Character
+    if not character then return end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not root or humanoid.Health <= 0 then return end
+    return character, humanoid, root
+end
 
+-- Slider helper
+local function makeSlider(label, y, minV, maxV, initial, callback)
     local text = Instance.new("TextLabel")
     text.Size = UDim2.new(1, -24, 0, 20)
     text.Position = UDim2.fromOffset(12, y)
@@ -147,27 +152,24 @@ local function makeSlider(label, y, minValue, maxValue, initial, callback)
     Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
 
     local fill = Instance.new("Frame")
-    fill.Size = UDim2.fromScale((initial - minValue) / (maxValue - minValue), 1)
-    fill.BackgroundColor3 = Color3.fromRGB(194, 123, 255)
     fill.BorderSizePixel = 0
+    fill.BackgroundColor3 = Color3.fromRGB(194, 123, 255)
     fill.Parent = bar
     Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-
-    text.Text = label .. ": " .. value
-    callback(value)
 
     local function update(x)
         local width = bar.AbsoluteSize.X
         if width <= 0 then return end
-
-        local ratio = math.clamp(
-            (x - bar.AbsolutePosition.X) / width, 0, 1
-        )
-        value = math.floor(minValue + ratio * (maxValue - minValue))
+        local ratio = math.clamp((x - bar.AbsolutePosition.X) / width, 0, 1)
+        local value = math.floor(minV + ratio * (maxV - minV))
         fill.Size = UDim2.fromScale(ratio, 1)
         text.Text = label .. ": " .. value
         callback(value)
     end
+
+    text.Text = label .. ": " .. initial
+    fill.Size = UDim2.fromScale((initial - minV) / (maxV - minV), 1)
+    callback(initial)
 
     bar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
@@ -176,37 +178,48 @@ local function makeSlider(label, y, minValue, maxValue, initial, callback)
         end
     end)
 
-    UserInputService.InputChanged:Connect(function(input)
+    UIS.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement
-            or input.UserInputType == Enum.UserInputType.Touch then
-            if UserInputService:IsMouseButtonPressed(
-                Enum.UserInputType.MouseButton1
-            ) then
-                update(input.Position.X)
-            end
+            and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+            update(input.Position.X)
         end
     end)
 end
 
 makeSlider("Spin speed (deg/sec)", 205, 180, 3600, spinSpeed,
     function(v) spinSpeed = v end)
-
 makeSlider("Launch power", 260, 20, 150, jumpPower,
     function(v) jumpPower = v end)
-
 makeSlider("Number of spins", 315, 1, 30, spinCount,
     function(v) spinCount = v end)
 
--- ORIGINAL TRICK FUNCTION: KEPT UNCHANGED
-local function doTrick(launch)
-    if busy then return end
+local function stopTrick(message)
+    trickToken += 1
+    activeTrick = nil
+    airButton.Text = "Air Spin: OFF"
+    fallButton.Text = "Air Spin (Fall): OFF"
+    if message then notify(message) end
+end
 
-    local character = player.Character
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    local root = character and character:FindFirstChild("HumanoidRootPart")
-    if not humanoid or not root or humanoid.Health <= 0 then return end
+-- Trick sequence: spins through the requested rotations,
+-- then allows normal gravity to bring the character down.
+local function startTrick(launch)
+    if activeTrick then
+        stopTrick("Trick cancelled")
+        return
+    end
 
-    busy = true
+    local _, humanoid, root = getParts()
+    if not humanoid or not root then
+        notify("Character not ready")
+        return
+    end
+
+    trickToken += 1
+    local myToken = trickToken
+    activeTrick = launch and "fall" or "air"
+    airButton.Text = launch and "Air Spin: OFF" or "Air Spin: ON"
+    fallButton.Text = launch and "Air Spin (Fall): ON" or "Air Spin (Fall): OFF"
 
     if launch then
         root.AssemblyLinearVelocity = Vector3.new(
@@ -218,36 +231,43 @@ local function doTrick(launch)
         humanoid.Jump = true
     end
 
-    local duration = (360 * spinCount) / spinSpeed
-    local elapsed = 0
-    local connection
+    notify(launch and "Catapult spin started" or "Air spin started")
 
-    connection = RunService.RenderStepped:Connect(function(dt)
-        if not root.Parent or humanoid.Health <= 0 then
-            connection:Disconnect()
-            busy = false
-            return
+    task.spawn(function()
+        local duration = (360 * spinCount) / math.max(spinSpeed, 1)
+        local elapsed = 0
+        local startCFrame = root.CFrame
+        local startPosition = root.Position
+
+        while elapsed < duration and trickToken == myToken do
+            local dt = RunService.Heartbeat:Wait()
+            if not root.Parent or humanoid.Health <= 0 then break end
+
+            elapsed = math.min(elapsed + dt, duration)
+            local angle = math.rad(360 * spinCount) * (elapsed / duration)
+
+            -- Preserve the current position while applying the original
+            -- trick's Y-axis rotation.
+            root.CFrame = CFrame.new(root.Position)
+                * (startCFrame - startPosition)
+                * CFrame.Angles(0, angle, 0)
         end
 
-        elapsed += dt
-        local angle = math.rad(spinSpeed * elapsed)
-        root.CFrame = CFrame.new(root.Position)
-            * CFrame.Angles(0, angle, 0)
+        if trickToken ~= myToken then return end
 
-        if elapsed >= duration then
-            connection:Disconnect()
-            busy = false
-        end
+        activeTrick = nil
+        airButton.Text = "Air Spin: OFF"
+        fallButton.Text = "Air Spin (Fall): OFF"
+        notify("Trick finished")
     end)
 end
 
--- ORIGINAL BUTTON CONNECTIONS: KEPT UNCHANGED
-spinButton.Activated:Connect(function()
-    doTrick(false)
+airButton.Activated:Connect(function()
+    startTrick(false)
 end)
 
 fallButton.Activated:Connect(function()
-    doTrick(true)
+    startTrick(true)
 end)
 
 musicButton.Activated:Connect(function()
@@ -267,17 +287,12 @@ songButton.Activated:Connect(function()
     local name = songNames[songIndex]
     music.SoundId = "rbxassetid://" .. songs[name]
     songButton.Text = "♫ Song: " .. name
-
-    if music.IsPlaying then
-        music:Play()
-    end
-
+    if music.IsPlaying then music:Play() end
     notify("Song: " .. name)
 end)
 
 -- Drag panel by title
-local dragging = false
-local dragStart, startPosition
+local dragging, dragStart, startPosition = false, nil, nil
 
 title.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
@@ -288,7 +303,7 @@ title.InputBegan:Connect(function(input)
     end
 end)
 
-UserInputService.InputChanged:Connect(function(input)
+UIS.InputChanged:Connect(function(input)
     if dragging and (
         input.UserInputType == Enum.UserInputType.MouseMovement
         or input.UserInputType == Enum.UserInputType.Touch
@@ -301,7 +316,7 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
-UserInputService.InputEnded:Connect(function(input)
+UIS.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
         dragging = false
@@ -329,6 +344,10 @@ end)
 showButton.Activated:Connect(function()
     panel.Visible = true
     showButton.Visible = false
+end)
+
+player.CharacterAdded:Connect(function()
+    stopTrick()
 end)
 
 notify("RZR by leo loaded 💜")
