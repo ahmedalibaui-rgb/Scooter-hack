@@ -1,0 +1,183 @@
+
+-- SCOOTER TRICK CONTROLLER
+-- Place this LocalScript in StarterPlayer > StarterPlayerScripts
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Settings
+local height = 10
+local speed = 20
+local turnSpeed = 360 -- degrees per second
+
+local active = false
+local character, humanoid, root
+local startPosition
+local elapsed = 0
+local angle = 0
+local loop
+
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "ScooterTrickUI"
+gui.ResetOnSpawn = false
+gui.Parent = playerGui
+
+local panel = Instance.new("Frame")
+panel.Size = UDim2.fromOffset(290, 340)
+panel.Position = UDim2.new(0, 25, 0.5, -170)
+panel.BackgroundColor3 = Color3.fromRGB(28, 30, 38)
+panel.BorderSizePixel = 0
+panel.Parent = gui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = panel
+
+local function makeLabel(text, y, size)
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, -24, 0, size or 28)
+	label.Position = UDim2.fromOffset(12, y)
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.TextSize = 16
+	label.Font = Enum.Font.Gotham
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = panel
+	return label
+end
+
+makeLabel("🛴  SCOOTER TRICKS", 12, 34).Font =
+	Enum.Font.GothamBold
+
+local function makeInput(title, default, y)
+	makeLabel(title, y, 25)
+
+	local input = Instance.new("TextBox")
+	input.Size = UDim2.new(1, -24, 0, 34)
+	input.Position = UDim2.fromOffset(12, y + 25)
+	input.BackgroundColor3 = Color3.fromRGB(48, 51, 63)
+	input.TextColor3 = Color3.new(1, 1, 1)
+	input.PlaceholderText = title
+	input.Text = tostring(default)
+	input.TextSize = 16
+	input.Font = Enum.Font.Gotham
+	input.ClearTextOnFocus = false
+	input.Parent = panel
+
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 7)
+	c.Parent = input
+
+	return input
+end
+
+local heightInput = makeInput("Air height (studs)", height, 48)
+local speedInput = makeInput("Forward speed", speed, 123)
+local turnInput = makeInput("Spin speed (degrees/sec)", turnSpeed, 198)
+
+local function makeButton(text, color, x, callback)
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.fromOffset(125, 38)
+	button.Position = UDim2.fromOffset(x, 280)
+	button.BackgroundColor3 = color
+	button.TextColor3 = Color3.new(1, 1, 1)
+	button.Text = text
+	button.TextSize = 15
+	button.Font = Enum.Font.GothamBold
+	button.Parent = panel
+
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 8)
+	c.Parent = button
+
+	button.Activated:Connect(callback)
+	return button
+end
+
+local status = makeLabel("Status: Ready", 250, 24)
+status.TextSize = 13
+
+local function stopTrick()
+	active = false
+
+	if loop then
+		loop:Disconnect()
+		loop = nil
+	end
+
+	if root and root.Parent then
+		root.Anchored = false
+	end
+
+	if humanoid and humanoid.Parent then
+		humanoid.AutoRotate = true
+		humanoid.PlatformStand = false
+	end
+
+	status.Text = "Status: Stopped"
+end
+
+local function startTrick()
+	if active then return end
+
+	character = player.Character
+	if not character then return end
+
+	humanoid = character:FindFirstChildOfClass("Humanoid")
+	root = character:FindFirstChild("HumanoidRootPart")
+
+	if not humanoid or not root or humanoid.Health <= 0 then
+		status.Text = "Status: Character unavailable"
+		return
+	end
+
+	height = math.clamp(tonumber(heightInput.Text) or 10, 0, 200)
+	speed = math.clamp(tonumber(speedInput.Text) or 20, 0, 100)
+	turnSpeed = math.clamp(tonumber(turnInput.Text) or 360, 0, 1440)
+
+	active = true
+	elapsed = 0
+	angle = 0
+	startPosition = root.Position
+
+	humanoid.AutoRotate = false
+	humanoid.PlatformStand = true
+	root.Anchored = true
+
+	status.Text = "Status: Trick active!"
+
+	loop = RunService.RenderStepped:Connect(function(dt)
+		if not active or not root or not root.Parent then
+			stopTrick()
+			return
+		end
+
+		elapsed += dt
+		angle += math.rad(turnSpeed) * dt
+
+		-- Rise to the selected height, then stay airborne.
+		local rise = math.min(elapsed / 0.6, 1) * height
+
+		-- Move forward in the direction the character initially faced.
+		local forward = startPosition + root.CFrame.LookVector * 0
+		local direction = character:GetPivot().LookVector
+		local position = startPosition
+			+ Vector3.new(0, rise, 0)
+			+ direction * speed * elapsed
+
+		root.CFrame = CFrame.new(position)
+			* CFrame.Angles(0, angle, 0)
+	end)
+end
+
+makeButton("START TRICK", Color3.fromRGB(30, 155, 90), 12, startTrick)
+makeButton("STOP", Color3.fromRGB(195, 55, 65), 153, stopTrick)
+
+player.CharacterAdded:Connect(function()
+	if active then stopTrick() end
+end)
